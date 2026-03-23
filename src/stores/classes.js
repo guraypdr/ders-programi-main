@@ -102,19 +102,26 @@ export const useClassesStore = defineStore('classes', () => {
     }, 0)
   }
 
-  function validateDailyHours(classId, daySchedule) {
-    const cls = classes.value.find(c => c.id === classId)
-    if (!cls) return { valid: false, error: 'Sınıf bulunamadı' }
-    
-    const dailyHours = daySchedule.filter(s => s).length
-    if (cls.maxDailyHours && dailyHours > cls.maxDailyHours) {
-      return {
-        valid: false,
-        error: `Günlük ders saati ${cls.maxDailyHours} saati aşıyor`
+  function importFromExcel(data) {
+    let addedCount = 0
+    data.forEach((row, index) => {
+      const cls = {
+        id: 'class_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9),
+        name: row.name || '',
+        level: row.level || '',
+        field: row.field || 'default',
+        mandatoryHours: parseInt(row.mandatoryHours) || 0,
+        electiveHours: parseInt(row.electiveHours) || 0,
+        guidanceHours: parseInt(row.guidanceHours) || 0,
+        maxDailyHours: parseInt(row.maxDailyHours) || settingsStore.dailyLessonHours,
+        advisorTeacherId: row.advisorTeacherId || '',
+        createdAt: new Date().toISOString()
       }
-    }
-    
-    return { valid: true }
+      classes.value.push(cls)
+      classLessons.value[cls.id] = []
+      addedCount++
+    })
+    return addedCount
   }
 
   return {
@@ -130,6 +137,6 @@ export const useClassesStore = defineStore('classes', () => {
     removeLesson,
     updateTeacherAssignment,
     getTotalHours,
-    validateDailyHours
+    importFromExcel
   }
 })

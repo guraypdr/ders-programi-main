@@ -24,12 +24,25 @@ const isLoginPage = computed(() => route.name === 'login')
 
 .main-content {
   flex: 1;
-  margin-left: 260px;
+  margin-left: 240px;
   min-height: 100vh;
-  background: var(--bg-secondary);
+  background: #f8fafc;
+  padding: 0;
 }
 
 .main-content.full-width {
   margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
 }
 </style>

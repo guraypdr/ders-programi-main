@@ -6,10 +6,16 @@
           <h1 class="page-title">Sınıflar</h1>
           <p class="page-subtitle">Sınıfları yönetin, ders atamaları yapın</p>
         </div>
-        <button @click="openAddModal" class="btn btn-primary">
-          <Plus class="icon" />
-          Sınıf Ekle
-        </button>
+        <div class="header-actions">
+          <button @click="showImportModal = true" class="btn btn-secondary">
+            <Upload class="icon" />
+            Excel'den Yükle
+          </button>
+          <button @click="openAddModal" class="btn btn-primary">
+            <Plus class="icon" />
+            Sınıf Ekle
+          </button>
+        </div>
       </div>
     </header>
 
@@ -250,6 +256,38 @@
         <button @click="deleteClass" class="btn btn-danger">Sil</button>
       </template>
     </Modal>
+
+    <!-- Import Modal -->
+    <Modal v-if="showImportModal" @close="showImportModal = false">
+      <template #header>
+        <h3>Excel'den Sınıf Yükle</h3>
+      </template>
+      <template #body>
+        <div class="import-section">
+          <p class="import-info">Excel dosyanızda şu kolonlar olmalıdır:</p>
+          <ul class="import-columns">
+            <li><strong>name</strong> - Sınıf adı</li>
+            <li><strong>level</strong> - Sınıf düzeyi</li>
+            <li><strong>field</strong> - Alan (lise için isteğe bağlı)</li>
+            <li><strong>mandatoryHours</strong> - Zorunlu ders saati (isteğe bağlı)</li>
+            <li><strong>electiveHours</strong> - Seçmeli ders saati (isteğe bağlı)</li>
+            <li><strong>guidanceHours</strong> - Rehberlik saati (isteğe bağlı)</li>
+            <li><strong>maxDailyHours</strong> - Günlük maksimum ders saati (isteğe bağlı)</li>
+          </ul>
+          <div class="file-upload">
+            <input type="file" ref="fileInput" accept=".xlsx,.xls" @change="handleFileUpload" class="file-input">
+            <button @click="$refs.fileInput.click()" class="btn btn-secondary">
+              <Upload class="icon" />
+              Dosya Seç
+            </button>
+          </div>
+        </div>
+      </template>
+    </Modal>
+  </div>
+
+  <div v-if="importMessage" :class="['import-message', importMessage.includes('Veri içe aktarılamadı') || importMessage.includes('hata') ? 'error' : 'success']">
+    {{ importMessage }}
   </div>
 </template>
 
@@ -260,13 +298,15 @@ import { useTeachersStore } from '../stores/teachers'
 import { useLessonsStore } from '../stores/lessons'
 import { useSettingsStore } from '../stores/settings'
 import Modal from '../components/common/Modal.vue'
+import * as XLSX from 'xlsx'
 import {
   Plus,
   Edit2,
   Trash2,
   School,
   User,
-  BookOpen
+  BookOpen,
+  Upload
 } from 'lucide-vue-next'
 
 const classesStore = useClassesStore()
@@ -286,9 +326,11 @@ function capitalizeWords(str) {
 const showModal = ref(false)
 const showLessonsModal = ref(false)
 const showDeleteModal = ref(false)
+const showImportModal = ref(false)
 const editingClass = ref(null)
 const selectedClass = ref(null)
 const classToDelete = ref(null)
+const importMessage = ref('')
 
 const form = ref({
   name: '',
@@ -470,6 +512,81 @@ function deleteClass() {
   showDeleteModal.value = false
   classToDelete.value = null
 }
+
+function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+
+      // Veri doğrulama
+      const validationErrors = validateExcelData(jsonData)
+      if (validationErrors.length > 0) {
+        showImportModal.value = false
+        importMessage.value = `Veri içe aktarılamadı:\n${validationErrors.join('\n')}`
+        // Clear message after 5 seconds for errors
+        setTimeout(() => importMessage.value = '', 5000)
+        // Reset file input
+        event.target.value = ''
+        return
+      }
+
+      const count = classesStore.importFromExcel(jsonData)
+      showImportModal.value = false
+      importMessage.value = `${count} sınıf başarıyla yüklendi!`
+      // Clear message after 3 seconds
+      setTimeout(() => importMessage.value = '', 3000)
+      // Reset file input
+      event.target.value = ''
+    } catch (error) {
+      showImportModal.value = false
+      importMessage.value = `Dosya okunurken hata oluştu: ${error.message}`
+      // Clear message after 5 seconds for errors
+      setTimeout(() => importMessage.value = '', 5000)
+      // Reset file input
+      event.target.value = ''
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function validateExcelData(data) {
+  const errors = []
+
+  if (!data || data.length === 0) {
+    errors.push('Excel dosyası boş veya veri bulunamadı.')
+    return errors
+  }
+
+  data.forEach((row, index) => {
+    const rowNumber = index + 2 // Excel'de satırlar 1'den başlar, başlık satırı 1, veri satırları 2'den başlar
+
+    // Gerekli kolonları kontrol et
+    const name = row.name || row.Name
+    const level = row.level || row.Level
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Sınıf adı alanı eksik veya boş (name)`)
+    }
+
+    if (!level || level === '') {
+      errors.push(`Satır ${rowNumber}: Sınıf düzeyi alanı eksik veya boş (level)`)
+    }
+
+    // Sınıf adı kontrolü
+    if (name && typeof name === 'string' && name.length > 10) {
+      errors.push(`Satır ${rowNumber}: Sınıf adı en fazla 10 karakter olabilir`)
+    }
+  })
+
+  return errors
+}
 </script>
 
 <style scoped>
@@ -485,6 +602,11 @@ function deleteClass() {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .page-title {
@@ -860,5 +982,76 @@ function deleteClass() {
   .form-row {
     grid-template-columns: 1fr;
   }
+}
+
+.import-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.import-info {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.import-columns {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.import-columns li {
+  padding: 4px 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.import-columns li:last-child {
+  border-bottom: none;
+}
+
+.file-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.file-input {
+  display: none;
+}
+
+.import-message {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  max-width: 400px;
+  white-space: pre-line;
+}
+
+.import-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.import-message.error {
+  background: #fee2e2;
+  color: #dc2626;
 }
 </style>

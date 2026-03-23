@@ -78,7 +78,7 @@ function getIcon(iconName) {
   position: fixed;
   left: 0;
   top: 0;
-  width: 260px;
+  width: 240px;
   height: 100vh;
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   color: white;
@@ -168,5 +168,16 @@ function getIcon(iconName) {
 .school-type {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
 }
 </style>

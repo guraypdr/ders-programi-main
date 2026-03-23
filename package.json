@@ -4,11 +4,11 @@
   "description": "Okul Ders Programı Yönetim Sistemi",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "vite --port 5175",
+    "dev": "vite --port 5173",
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5175 && set NODE_ENV=development && electron .\"",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && set NODE_ENV=development && electron .\"",
     "build-electron": "npm run build && electron-builder"
   },
   "keywords": [
