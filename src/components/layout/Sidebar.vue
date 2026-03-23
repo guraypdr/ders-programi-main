@@ -38,7 +38,8 @@ import {
   BookOpen,
   Shield,
   Settings,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-vue-next'
 
 const route = useRoute()

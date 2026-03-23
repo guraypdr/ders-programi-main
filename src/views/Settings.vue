@@ -154,6 +154,10 @@
         Ayarları Kaydet
       </button>
     </div>
+
+    <div v-if="saveMessage" class="save-message">
+      {{ saveMessage }}
+    </div>
   </div>
 </template>
 
@@ -164,6 +168,7 @@ import { Plus, X, Save } from 'lucide-vue-next'
 
 const settingsStore = useSettingsStore()
 const newField = ref('')
+const saveMessage = ref('')
 
 // Utility function to capitalize first letter of each word
 function capitalizeWords(str) {
@@ -259,7 +264,9 @@ function removeField(fieldId) {
 
 function saveSettings() {
   settingsStore.updateSettings(settings.value)
-  alert('Ayarlar başarıyla kaydedildi!')
+  saveMessage.value = 'Ayarlar başarıyla kaydedildi!'
+  // Clear message after 3 seconds
+  setTimeout(() => saveMessage.value = '', 3000)
 }
 </script>
 
@@ -583,5 +590,19 @@ function saveSettings() {
   .actions-bar {
     left: 0;
   }
+}
+
+.save-message {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  padding: 12px 16px;
+  background: #d1fae5;
+  color: #065f46;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
 }
 </style>

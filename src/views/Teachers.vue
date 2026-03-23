@@ -315,6 +315,10 @@
       </template>
     </Modal>
   </div>
+
+  <div v-if="importMessage" :class="['import-message', importMessage.includes('Veri içe aktarılamadı') || importMessage.includes('hata') ? 'error' : 'success']">
+    {{ importMessage }}
+  </div>
 </template>
 
 <script setup>
@@ -357,6 +361,7 @@ const showDeleteModal = ref(false)
 const editingTeacher = ref(null)
 const selectedTeacher = ref(null)
 const teacherToDelete = ref(null)
+const importMessage = ref('')
 
 const form = ref({
   firstName: '',
@@ -548,18 +553,83 @@ function handleFileUpload(event) {
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result)
-    const workbook = XLSX.read(data, { type: 'array' })
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet)
-    
-    const count = teachersStore.importFromExcel(jsonData)
-    showImportModal.value = false
-    alert(`${count} öğretmen başarıyla yüklendi!`)
-    // Reset file input
-    event.target.value = ''
+    try {
+      const data = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+
+      // Veri doğrulama
+      const validationErrors = validateExcelData(jsonData)
+      if (validationErrors.length > 0) {
+        showImportModal.value = false
+        importMessage.value = `Veri içe aktarılamadı:\n${validationErrors.join('\n')}`
+        // Clear message after 5 seconds for errors
+        setTimeout(() => importMessage.value = '', 5000)
+        // Reset file input
+        event.target.value = ''
+        return
+      }
+
+      const count = teachersStore.importFromExcel(jsonData)
+      showImportModal.value = false
+      importMessage.value = `${count} öğretmen başarıyla yüklendi!`
+      // Clear message after 3 seconds
+      setTimeout(() => importMessage.value = '', 3000)
+      // Reset file input
+      event.target.value = ''
+    } catch (error) {
+      showImportModal.value = false
+      importMessage.value = `Dosya okunurken hata oluştu: ${error.message}`
+      // Clear message after 5 seconds for errors
+      setTimeout(() => importMessage.value = '', 5000)
+      // Reset file input
+      event.target.value = ''
+    }
   }
   reader.readAsArrayBuffer(file)
+}
+
+function validateExcelData(data) {
+  const errors = []
+
+  if (!data || data.length === 0) {
+    errors.push('Excel dosyası boş veya veri bulunamadı.')
+    return errors
+  }
+
+  data.forEach((row, index) => {
+    const rowNumber = index + 2 // Excel'de satırlar 1'den başlar, başlık satırı 1, veri satırları 2'den başlar
+
+    // Gerekli kolonları kontrol et
+    const firstName = row.firstName || row.ad || row.FirstName || row.Ad
+    const lastName = row.lastName || row.soyad || row.LastName || row.Soyad
+    const branch = row.branch || row.branş || row.Branch || row.Branş
+    const shortName = row.shortName || row.kısaltma || row.ShortName || row.Kısaltma
+
+    if (!firstName || typeof firstName !== 'string' || firstName.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Ad alanı eksik veya boş (firstName/ad)`)
+    }
+
+    if (!lastName || typeof lastName !== 'string' || lastName.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Soyad alanı eksik veya boş (lastName/soyad)`)
+    }
+
+    if (!branch || typeof branch !== 'string' || branch.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Branş alanı eksik veya boş (branch/branş)`)
+    }
+
+    if (!shortName || typeof shortName !== 'string' || shortName.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Kısaltma alanı eksik veya boş (shortName/kısaltma)`)
+    }
+
+    // Kısaltma uzunluğu kontrolü
+    if (shortName && typeof shortName === 'string' && shortName.length > 5) {
+      errors.push(`Satır ${rowNumber}: Kısaltma en fazla 5 karakter olabilir`)
+    }
+  })
+
+  return errors
 }
 
 function viewTeacherDetails(teacher) {
@@ -971,5 +1041,29 @@ function viewTeacherDetails(teacher) {
   .availability-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.import-message {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  max-width: 400px;
+  white-space: pre-line;
+}
+
+.import-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.import-message.error {
+  background: #fee2e2;
+  color: #dc2626;
 }
 </style>

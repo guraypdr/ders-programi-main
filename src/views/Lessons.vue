@@ -6,10 +6,16 @@
           <h1 class="page-title">Dersler</h1>
           <p class="page-subtitle">Dersleri yönetin, dağıtım planlarını belirleyin</p>
         </div>
-        <button @click="openAddModal" class="btn btn-primary">
-          <Plus class="icon" />
-          Ders Ekle
-        </button>
+        <div class="header-actions">
+          <button @click="showImportModal = true" class="btn btn-secondary">
+            <Upload class="icon" />
+            Excel'den Yükle
+          </button>
+          <button @click="openAddModal" class="btn btn-primary">
+            <Plus class="icon" />
+            Ders Ekle
+          </button>
+        </div>
       </div>
     </header>
 
@@ -36,10 +42,6 @@
               </div>
               <h4 class="lesson-name">{{ lesson.name }}</h4>
               <div class="lesson-details">
-                <span class="detail-item">
-                  <BookOpen class="detail-icon" />
-                  {{ lesson.branch }}
-                </span>
                 <span class="detail-item">
                   <Layers class="detail-icon" />
                   {{ lesson.distributionPlan }}
@@ -82,10 +84,6 @@
               <h4 class="lesson-name">{{ lesson.name }}</h4>
               <div class="lesson-details">
                 <span class="detail-item">
-                  <BookOpen class="detail-icon" />
-                  {{ lesson.branch }}
-                </span>
-                <span class="detail-item">
                   <Layers class="detail-icon" />
                   {{ lesson.distributionPlan }}
                 </span>
@@ -122,10 +120,6 @@
               </div>
               <h4 class="lesson-name">{{ lesson.name }}</h4>
               <div class="lesson-details">
-                <span class="detail-item">
-                  <BookOpen class="detail-icon" />
-                  {{ lesson.branch }}
-                </span>
                 <span class="detail-item">
                   <Layers class="detail-icon" />
                   {{ lesson.distributionPlan }}
@@ -193,20 +187,6 @@
           </div>
 
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Branş *</label>
-              <input 
-                v-model="form.branch" 
-                @blur="capitalizeOnBlur('branch')" 
-                @click.stop 
-                type="text" 
-                class="form-input" 
-                :class="{ error: validationErrors.branch }" 
-                required 
-                placeholder="örn: Matematik"
-              >
-              <span v-if="validationErrors.branch" class="error-message">{{ validationErrors.branch }}</span>
-            </div>
             <div class="form-group">
               <label class="form-label">Sınıf Düzeyi *</label>
               <select 
@@ -283,6 +263,38 @@
         <button @click="deleteLesson" class="btn btn-danger">Sil</button>
       </template>
     </Modal>
+
+    <!-- Import Modal -->
+    <Modal v-if="showImportModal" @close="showImportModal = false">
+      <template #header>
+        <h3>Excel'den Ders Yükle</h3>
+      </template>
+      <template #body>
+        <div class="import-section">
+          <p class="import-info">Excel dosyanızda şu kolonlar olmalıdır:</p>
+          <ul class="import-columns">
+            <li><strong>name</strong> veya <strong>ad</strong></li>
+            <li><strong>code</strong> veya <strong>kısaltma</strong></li>
+            <li><strong>level</strong> veya <strong>sınıf</strong></li>
+            <li><strong>type</strong> veya <strong>tür</strong> (zorunlu/secmeli/rehberlik)</li>
+            <li><strong>distributionPlan</strong> (isteğe bağlı, örn: 2+2+2)</li>
+            <li><strong>field</strong> (lise için isteğe bağlı)</li>
+            <li><strong>isStaj</strong> (isteğe bağlı, true/false)</li>
+          </ul>
+          <div class="file-upload">
+            <input type="file" ref="fileInput" accept=".xlsx,.xls" @change="handleFileUpload" class="file-input">
+            <button @click="$refs.fileInput.click()" class="btn btn-secondary">
+              <Upload class="icon" />
+              Dosya Seç
+            </button>
+          </div>
+        </div>
+      </template>
+    </Modal>
+  </div>
+
+  <div v-if="importMessage" :class="['import-message', importMessage.includes('Veri içe aktarılamadı') || importMessage.includes('hata') ? 'error' : 'success']">
+    {{ importMessage }}
   </div>
 </template>
 
@@ -291,6 +303,7 @@ import { ref, watch, nextTick } from 'vue'
 import { useLessonsStore } from '../stores/lessons'
 import { useSettingsStore } from '../stores/settings'
 import Modal from '../components/common/Modal.vue'
+import * as XLSX from 'xlsx'
 import {
   Plus,
   Edit2,
@@ -300,7 +313,8 @@ import {
   CheckSquare,
   HeartHandshake,
   Layers,
-  Tag
+  Tag,
+  Upload
 } from 'lucide-vue-next'
 
 const lessonsStore = useLessonsStore()
@@ -317,13 +331,14 @@ function capitalizeWords(str) {
 
 const showModal = ref(false)
 const showDeleteModal = ref(false)
+const showImportModal = ref(false)
 const editingLesson = ref(null)
 const lessonToDelete = ref(null)
+const importMessage = ref('')
 
 const form = ref({
   name: '',
   code: '',
-  branch: '',
   level: '',
   field: 'default',
   type: 'zorunlu',
@@ -336,7 +351,6 @@ const validationError = ref('')
 const validationErrors = ref({
   name: '',
   code: '',
-  branch: '',
   level: ''
 })
 
@@ -353,7 +367,6 @@ function openAddModal() {
   form.value = {
     name: '',
     code: '',
-    branch: '',
     level: settingsStore.classLevels[0] || '',
     field: 'default',
     type: 'zorunlu',
@@ -380,7 +393,6 @@ function saveLesson() {
   validationErrors.value = {
     name: '',
     code: '',
-    branch: '',
     level: ''
   }
   
@@ -393,10 +405,6 @@ function saveLesson() {
   }
   if (!form.value.code.trim()) {
     validationErrors.value.code = 'Lütfen ders kısaltması (kodu) girin.'
-    hasErrors = true
-  }
-  if (!form.value.branch.trim()) {
-    validationErrors.value.branch = 'Lütfen branş girin.'
     hasErrors = true
   }
   if (!form.value.level) {
@@ -425,6 +433,100 @@ function deleteLesson() {
   }
   showDeleteModal.value = false
   lessonToDelete.value = null
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet)
+
+      // Veri doğrulama
+      const validationErrors = validateExcelData(jsonData)
+      if (validationErrors.length > 0) {
+        showImportModal.value = false
+        importMessage.value = `Veri içe aktarılamadı:\n${validationErrors.join('\n')}`
+        // Clear message after 5 seconds for errors
+        setTimeout(() => importMessage.value = '', 5000)
+        // Reset file input
+        event.target.value = ''
+        return
+      }
+
+      const count = lessonsStore.importFromExcel(jsonData)
+      showImportModal.value = false
+      importMessage.value = `${count} ders başarıyla yüklendi!`
+      // Clear message after 3 seconds
+      setTimeout(() => importMessage.value = '', 3000)
+      // Reset file input
+      event.target.value = ''
+    } catch (error) {
+      showImportModal.value = false
+      importMessage.value = `Dosya okunurken hata oluştu: ${error.message}`
+      // Clear message after 5 seconds for errors
+      setTimeout(() => importMessage.value = '', 5000)
+      // Reset file input
+      event.target.value = ''
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function validateExcelData(data) {
+  const errors = []
+
+  if (!data || data.length === 0) {
+    errors.push('Excel dosyası boş veya veri bulunamadı.')
+    return errors
+  }
+
+  data.forEach((row, index) => {
+    const rowNumber = index + 2 // Excel'de satırlar 1'den başlar, başlık satırı 1, veri satırları 2'den başlar
+
+    // Gerekli kolonları kontrol et
+    const name = row.name || row.ad || row.Name || row.Ad
+    const code = row.code || row.kısaltma || row.Code || row.Kısaltma
+    const level = row.level || row.sınıf || row.Level || row.Sınıf
+    const type = row.type || row.tür || row.Type || row.Tür
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Ders adı alanı eksik veya boş (name/ad)`)
+    }
+
+    if (!code || typeof code !== 'string' || code.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Kısaltma alanı eksik veya boş (code/kısaltma)`)
+    }
+
+    if (!level || level === '') {
+      errors.push(`Satır ${rowNumber}: Sınıf düzeyi alanı eksik veya boş (level/sınıf)`)
+    }
+
+    if (!type || typeof type !== 'string' || type.trim() === '') {
+      errors.push(`Satır ${rowNumber}: Ders türü alanı eksik veya boş (type/tür)`)
+    }
+
+    // Kısaltma uzunluğu kontrolü
+    if (code && typeof code === 'string' && code.length > 5) {
+      errors.push(`Satır ${rowNumber}: Kısaltma en fazla 5 karakter olabilir`)
+    }
+
+    // Ders türü kontrolü
+    if (type && typeof type === 'string') {
+      const validTypes = ['zorunlu', 'secmeli', 'rehberlik']
+      const normalizedType = type.toLowerCase().trim()
+      if (!validTypes.includes(normalizedType)) {
+        errors.push(`Satır ${rowNumber}: Ders türü geçersiz (${type}). Geçerli değerler: zorunlu, secmeli, rehberlik`)
+      }
+    }
+  })
+
+  return errors
 }
 </script>
 
@@ -737,5 +839,56 @@ function deleteLesson() {
   .form-row {
     grid-template-columns: 1fr;
   }
+}
+
+.import-section {
+  padding: 16px 0;
+}
+
+.import-info {
+  margin-bottom: 12px;
+}
+
+.import-columns {
+  margin-bottom: 20px;
+  padding-left: 20px;
+}
+
+.import-columns li {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.file-input {
+  display: none;
+}
+
+.import-message {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  max-width: 400px;
+  white-space: pre-line;
+}
+
+.import-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.import-message.error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.header-actions {
+  display: flex;
+  gap: 16px;
 }
 </style>

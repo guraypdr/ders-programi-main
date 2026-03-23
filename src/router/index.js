@@ -6,6 +6,7 @@ import Lessons from '../views/Lessons.vue'
 import Constraints from '../views/Constraints.vue'
 import Settings from '../views/Settings.vue'
 import ScheduleGenerator from '../views/ScheduleGenerator.vue'
+import Templates from '../views/Templates.vue'
 
 const routes = [
   {
@@ -49,6 +50,12 @@ const routes = [
     name: 'schedule',
     component: ScheduleGenerator,
     meta: { title: 'Program Oluştur', icon: 'Calendar' }
+  },
+  {
+    path: '/templates',
+    name: 'templates',
+    component: Templates,
+    meta: { title: 'Şablonlar', icon: 'FileText' }
   },
 ]
 

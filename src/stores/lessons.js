@@ -98,6 +98,30 @@ export const useLessonsStore = defineStore('lessons', () => {
     lessons.value = lessons.value.filter(l => l.id !== id)
   }
 
+  function importFromExcel(data) {
+    let addedCount = 0
+    data.forEach((row, index) => {
+      const lesson = {
+        id: 'lesson_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9),
+        name: row.name || row.ad || '',
+        code: (row.code || row.kısaltma || '').toUpperCase(),
+        level: row.level || row.sınıf || '',
+        field: row.field || 'default',
+        type: (row.type || row.tür || 'zorunlu').toLowerCase(),
+        distributionPlan: row.distributionPlan || '',
+        isStaj: row.isStaj === 'true' || row.isStaj === true || false,
+        createdAt: new Date().toISOString()
+      }
+      lessons.value.push(lesson)
+      
+      // Auto-assign to compatible classes
+      autoAssignToClasses(lesson)
+      
+      addedCount++
+    })
+    return addedCount
+  }
+
   function autoAssignToClasses(lesson) {
     // Find classes that match the lesson's level and field
     const compatibleClasses = classesStore.classes.filter(c => 
@@ -133,6 +157,7 @@ export const useLessonsStore = defineStore('lessons', () => {
     addLesson,
     updateLesson,
     deleteLesson,
+    importFromExcel,
     getDistributionPlan,
     getTotalHours
   }
